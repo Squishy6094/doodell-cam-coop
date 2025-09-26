@@ -1,5 +1,13 @@
 -- name: Doodell Cam
 
+--[[
+TODO:
+- FOV Slider
+- Freelook Respects Mouse
+- Freelook Angle Based
+- Verticle Angle Slider
+]]
+
 local STORAGE_CAMERA_TOGGLE = "cameraOn"
 local STORAGE_CAMERA_ANALOG = "cameraAnalog"
 local STORAGE_CAMERA_MOUSE = "cameraAnalog"
@@ -91,6 +99,7 @@ function doodell_cam_active()
     local m = gMarioStates[0]
     return doodell_cam_enabled() and
     not camera_is_frozen() and
+    not camera_config_is_free_cam_enabled() and
     not omm_camera_enabled() and
     m.area.camera ~= nil and
     m.statusForCamera.cameraEvent ~= CAM_EVENT_DOOR and
@@ -192,6 +201,11 @@ local function camera_update()
     if not doodell_cam_active() then
         if mode == CAMERA_MODE_NONE then
             set_camera_mode(c, CAMERA_MODE_OUTWARD_RADIAL, 0)
+            l.roll = 0
+            l.keyDanceRoll = 0
+            camFov = 50
+            set_override_fov(0)
+            soft_reset_camera(m.area.camera)
         end
         return
     end
@@ -353,14 +367,12 @@ local function camera_update()
         vec3f_copy(l.focus, focusPos)
         vec3f_copy(l.goalFocus, focusPos)
 
-        if m.action == ACT_SQUISHY_GROUND_POUND_LAND then return end
-
         local distFromFloor = m.pos.y - m.floorHeight
-        distFromFloor = distFromFloor < 1000 and distFromFloor or 0
+        distFromFloor = (distFromFloor < 1000 and m.action & ACT_FLAG_SWIMMING_OR_FLYING == 0) and distFromFloor or 0
 
         rawFocusPos = {
             x = m.pos.x + camPanX + posVel.x*camForwardDist*camScale,
-            y = m.pos.y + camPitch - distFromFloor*0.35 + 100 + 100*camScale*0.5 or 0 - eepyCamOffset,
+            y = m.pos.y + camPitch - distFromFloor*0.3 + 100 + 100*camScale*0.5 or 0 - eepyCamOffset,
             z = m.pos.z + camPanZ + posVel.z*camForwardDist*camScale,
         }
         rawCamPos = {
@@ -393,9 +405,9 @@ local function camera_update()
             eepyTimer = 0
         end
         
+        -- Set Other Cam shitt
         l.roll = math.floor(lerp(l.roll, roll, 0.1))
         l.keyDanceRoll = l.roll -- Required for applying rotation because sm64 is fuckin stupid
-        --set_camera_roll_shake(1000, 0.1, 1)
         camFov = lerp(camFov, 50 + math.abs(m.forwardVel)*0.1, 0.1)
         set_override_fov(camFov)
 
@@ -443,12 +455,12 @@ local function hud_render()
         local x = width - 38 - 64*doodellScale + shakeX + (mousePullX/mousePullMax * 4)
         local y = height - 38 - 64*doodellScale + eepyCamOffset*0.1*doodellScale + shakeY + (mousePullY/mousePullMax * 4)
         djui_hud_set_color(255, 255, 255, 255)
-        hud_set_value(HUD_DISPLAY_FLAGS, hud_get_value(HUD_DISPLAY_FLAGS) & ~HUD_DISPLAY_FLAG_CAMERA)
+        hud_set_value(HUD_DISPLAY_FLAG_CAMERA, 0)
         djui_hud_set_rotation(l.roll, 0.5, 0.8)
         djui_hud_render_texture_tile(TEX_DOODELL_CAM, x, y, doodellScale, doodellScale, animFrame*128, doodellState*128, 128, 128)
         djui_hud_set_rotation(0, 0, 0)
     else
-        hud_set_value(HUD_DISPLAY_FLAGS, hud_get_value(HUD_DISPLAY_FLAGS) & HUD_DISPLAY_FLAG_CAMERA)
+        hud_set_value(HUD_DISPLAY_FLAG_CAMERA, 1)
     end
 end
 
@@ -520,7 +532,8 @@ local function menu_cam_pan_level(index, value)
     mod_storage_save_number(STORAGE_CAMERA_PAN, value)
 end
 hook_mod_menu_text("Camera made by Squishy6094")
-hook_mod_menu_checkbox("Camera On", mod_storage_load_bool(STORAGE_CAMERA_TOGGLE), menu_cam_toggle)
+hook_mod_menu_checkbox("Toggle Camera", mod_storage_load_bool(STORAGE_CAMERA_TOGGLE), menu_cam_toggle)
+hook_mod_menu_text("(Requires Freecam to be Disabled)")
 hook_mod_menu_checkbox("Analog Cam", mod_storage_load_bool(STORAGE_CAMERA_ANALOG), menu_cam_analog)
 hook_mod_menu_checkbox("Mouse Cam", mod_storage_load_bool(STORAGE_CAMERA_MOUSE), menu_cam_mouse)
 hook_mod_menu_slider("Pan Level", mod_storage_load_number(STORAGE_CAMERA_PAN) ~= 0 and mod_storage_load_number(STORAGE_CAMERA_PAN) or 0 , 1, 100, menu_cam_pan_level)
